@@ -6,7 +6,6 @@ A high-performance API gateway that proxies requests to OpenRouter while
 providing real-time threat detection for multi-stage split-up attacks.
 """
 
-import asyncio
 import json
 import os
 import time
@@ -16,38 +15,64 @@ from typing import Any, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Header, Depends
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from src.models.openai_compat import (
+from detection.analyzer import (
+    ThreatAnalyzer,
+    ThreatAssessment,
+)
+from detection.tracker import (
+    RequestTracker,
+    TrackedRequest,
+    create_request_id,
+)
+from models.openai_compat import (
+    ChatCompletionChunk,
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatCompletionChunk,
     Choice,
     ChoiceMessage,
     DeltaMessage,
-    ErrorResponse,
     ErrorDetail,
+    ErrorResponse,
     ModelInfo,
     ModelsResponse,
     StreamChoice,
     Usage,
 )
-from src.detection.tracker import RequestTracker, TrackedRequest, create_request_id, hash_api_key
-from src.detection.analyzer import ThreatAnalyzer, ThreatAssessment, ThreatLevel, ThreatAction
-from src.detection.patterns import AttackPattern
-from src.detection.fingerprint import AdvancedFingerprinter, ContentFingerprint
 
 load_dotenv()
 
-# Configuration
+# Backend Configuration
+BACKEND_TYPE = os.getenv("BACKEND_TYPE", "openrouter").lower()
+
+# OpenRouter Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# vLLM Configuration
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000")
+VLLM_API_KEY = os.getenv("VLLM_API_KEY", "")
+
+# General Configuration
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "openai/gpt-4o-mini")
 BLOCKING_ENABLED = os.getenv("BLOCKING_ENABLED", "false").lower() == "true"
 BLOCKING_THRESHOLD = float(os.getenv("BLOCKING_THRESHOLD", "0.8"))
+
+
+# Backend URL and Key Resolution
+def get_backend_config():
+    """Get backend URL and API key based on configured backend type."""
+    if BACKEND_TYPE == "vllm":
+        return VLLM_BASE_URL, VLLM_API_KEY
+    elif BACKEND_TYPE == "openrouter":
+        return OPENROUTER_BASE_URL, OPENROUTER_API_KEY
+    else:
+        raise ValueError(f"Unsupported backend type: {BACKEND_TYPE}")
+
 
 # Global instances
 request_tracker: Optional[RequestTracker] = None
@@ -87,7 +112,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="OpenSafety AI Corporation of America",
     description="Defensive AI Gateway with Split-Up Attack Detection. "
-                "Proxies requests to OpenRouter while detecting multi-stage cyberattacks.",
+    "Proxies requests to OpenRouter while detecting multi-stage cyberattacks.",
     version="0.3.0",
     lifespan=lifespan,
 )
@@ -105,6 +130,7 @@ app.add_middleware(
 # ============================================================================
 # Dependency Injection
 # ============================================================================
+
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP, respecting proxy headers."""
@@ -128,6 +154,7 @@ async def get_api_key(
 # Health & Info Endpoints
 # ============================================================================
 
+
 @app.get("/")
 async def root():
     """Root endpoint with service info."""
@@ -148,11 +175,14 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    backend_url, backend_key = get_backend_config()
     return {
         "status": "healthy",
         "service": "opensafety-ai",
         "timestamp": int(time.time()),
-        "openrouter_configured": bool(OPENROUTER_API_KEY),
+        "backend_type": BACKEND_TYPE,
+        "backend_configured": bool(backend_key),
+        "backend_url": backend_url,
         "blocking_enabled": BLOCKING_ENABLED,
     }
 
@@ -174,23 +204,30 @@ async def get_stats():
 # OpenAI-Compatible API Endpoints
 # ============================================================================
 
+
 @app.get("/v1/models", response_model=ModelsResponse)
 async def list_models(api_key: Optional[str] = Depends(get_api_key)):
     """
-    List available models from OpenRouter.
+    List available models from the configured backend.
     Mirrors OpenAI /v1/models endpoint.
     """
     if not http_client:
         raise HTTPException(status_code=503, detail="Service not initialized")
 
-    key = api_key or OPENROUTER_API_KEY
-    if not key:
+    backend_url, default_backend_key = get_backend_config()
+    key = api_key or default_backend_key
+
+    if not key and BACKEND_TYPE == "openrouter":
         raise HTTPException(status_code=401, detail="API key required")
 
     try:
+        headers = {}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+
         response = await http_client.get(
-            f"{OPENROUTER_BASE_URL}/models",
-            headers={"Authorization": f"Bearer {key}"},
+            f"{backend_url}/models",
+            headers=headers,
         )
         response.raise_for_status()
         data = response.json()
@@ -198,20 +235,24 @@ async def list_models(api_key: Optional[str] = Depends(get_api_key)):
         # Transform to our model format
         models = []
         for model in data.get("data", []):
-            models.append(ModelInfo(
-                id=model.get("id", ""),
-                created=model.get("created", 0),
-                owned_by=model.get("owned_by", "openrouter"),
-                context_length=model.get("context_length"),
-                pricing=model.get("pricing"),
-            ))
+            models.append(
+                ModelInfo(
+                    id=model.get("id", ""),
+                    created=model.get("created", 0),
+                    owned_by=model.get("owned_by", BACKEND_TYPE),
+                    context_length=model.get("context_length"),
+                    pricing=model.get("pricing"),
+                )
+            )
 
         return ModelsResponse(data=models)
 
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))  # noqa: B904
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"OpenRouter error: {str(e)}")
+        raise HTTPException(  # noqa: B904
+            status_code=502, detail=f"{BACKEND_TYPE.title()} error: {str(e)}"
+        )
 
 
 @app.post("/v1/chat/completions")
@@ -223,17 +264,19 @@ async def chat_completions(
     """
     OpenAI-compatible chat completions endpoint.
 
-    Proxies to OpenRouter while performing real-time threat analysis.
+    Proxies to the configured backend while performing real-time threat analysis.
     Detects split-up attacks, prompt injection, and coordinated campaigns.
     """
     if not http_client or not threat_analyzer:
         raise HTTPException(status_code=503, detail="Service not initialized")
 
-    key = api_key or OPENROUTER_API_KEY
-    if not key:
+    backend_url, default_backend_key = get_backend_config()
+    key = api_key or default_backend_key
+
+    if not key and BACKEND_TYPE == "openrouter":
         raise HTTPException(
             status_code=401,
-            detail="API key required. Set OPENROUTER_API_KEY or pass via Authorization header.",
+            detail=f"API key required. Set {BACKEND_TYPE.upper()}_API_KEY or pass via Authorization header.",  # noqa: E501
         )
 
     request_id = create_request_id()
@@ -296,11 +339,19 @@ async def chat_completions(
         openrouter_payload["model"] = DEFAULT_MODEL
 
     headers = {
-        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": request.headers.get("referer", "https://opensafety.ai"),
-        "X-Title": "OpenSafety AI Gateway",
     }
+
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+
+    if BACKEND_TYPE == "openrouter":
+        headers.update(
+            {
+                "HTTP-Referer": request.headers.get("referer", "https://opensafety.ai"),
+                "X-Title": "OpenSafety AI Gateway",
+            }
+        )
 
     # Handle streaming vs non-streaming
     if request_body.stream:
@@ -346,9 +397,10 @@ async def stream_chat_completion(
     model = payload.get("model", DEFAULT_MODEL)
 
     try:
+        backend_url, _ = get_backend_config()
         async with http_client.stream(
             "POST",
-            f"{OPENROUTER_BASE_URL}/chat/completions",
+            f"{backend_url}/chat/completions",
             json=payload,
             headers=headers,
         ) as response:
@@ -414,8 +466,9 @@ async def non_streaming_completion(
 ) -> JSONResponse:
     """Handle non-streaming chat completion."""
     try:
+        backend_url, _ = get_backend_config()
         response = await http_client.post(
-            f"{OPENROUTER_BASE_URL}/chat/completions",
+            f"{backend_url}/chat/completions",
             json=payload,
             headers=headers,
         )
@@ -424,7 +477,9 @@ async def non_streaming_completion(
         tracked.response_time_ms = elapsed_ms
 
         if response.status_code != 200:
-            error_data = response.json() if response.content else {"error": "Unknown error"}
+            error_data = (
+                response.json() if response.content else {"error": "Unknown error"}
+            )
             raise HTTPException(status_code=response.status_code, detail=error_data)
 
         data = response.json()
@@ -471,19 +526,23 @@ async def non_streaming_completion(
         )
 
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))  # noqa: B904
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"OpenRouter error: {str(e)}")
+        raise HTTPException(  # noqa: B904
+            status_code=502, detail=f"{BACKEND_TYPE.title()} error: {str(e)}"
+        )
 
 
 # ============================================================================
 # Threat Monitoring Endpoints
 # ============================================================================
 
+
 class ThreatReportResponse(BaseModel):
     """Response model for threat reports."""
+
     request_id: str
     timestamp: float
     threat_score: float
@@ -509,8 +568,12 @@ async def get_recent_threats(
             request_id=r.request_id,
             timestamp=r.timestamp,
             threat_score=r.threat_score,
-            threat_level=threat_analyzer._score_to_level(r.threat_score).value if threat_analyzer else "unknown",
-            client_ip=r.client_ip[:8] + "..." if len(r.client_ip) > 8 else r.client_ip,  # Partial IP for privacy
+            threat_level=threat_analyzer._score_to_level(r.threat_score).value
+            if threat_analyzer
+            else "unknown",
+            client_ip=r.client_ip[:8] + "..."
+            if len(r.client_ip) > 8
+            else r.client_ip,  # Partial IP for privacy
             patterns=r.detected_patterns,
             model=r.model,
         )
@@ -551,14 +614,17 @@ async def get_active_campaigns():
     for content_hash, requests in content_groups.items():
         unique_ips = set(r.client_ip for r in requests)
         if len(unique_ips) >= 3:
-            campaigns.append({
-                "content_hash": content_hash[:12] + "...",
-                "unique_sources": len(unique_ips),
-                "total_requests": len(requests),
-                "avg_threat_score": sum(r.threat_score for r in requests) / len(requests),
-                "first_seen": min(r.timestamp for r in requests),
-                "last_seen": max(r.timestamp for r in requests),
-            })
+            campaigns.append(
+                {
+                    "content_hash": content_hash[:12] + "...",
+                    "unique_sources": len(unique_ips),
+                    "total_requests": len(requests),
+                    "avg_threat_score": sum(r.threat_score for r in requests)
+                    / len(requests),
+                    "first_seen": min(r.timestamp for r in requests),
+                    "last_seen": max(r.timestamp for r in requests),
+                }
+            )
 
     campaigns.sort(key=lambda c: c["unique_sources"], reverse=True)
 
@@ -626,8 +692,10 @@ async def analyze_content(
 # Fingerprinting Endpoints
 # ============================================================================
 
+
 class FingerprintRequest(BaseModel):
     """Request for content fingerprinting."""
+
     content: str
     find_similar: bool = True
     min_similarity: float = 0.7
@@ -635,6 +703,7 @@ class FingerprintRequest(BaseModel):
 
 class FingerprintResponse(BaseModel):
     """Response with fingerprint details."""
+
     exact_hash: str
     structure_hash: str
     semantic_hash: str
@@ -718,10 +787,10 @@ async def compare_fingerprints(
 
     # Overall similarity
     overall = (
-        minhash_sim * 0.4 +
-        simhash_sim * 0.3 +
-        (1.0 if structural_match else 0.0) * 0.15 +
-        (1.0 if semantic_match else 0.0) * 0.15
+        minhash_sim * 0.4
+        + simhash_sim * 0.3
+        + (1.0 if structural_match else 0.0) * 0.15
+        + (1.0 if semantic_match else 0.0) * 0.15
     )
 
     return {
@@ -764,6 +833,7 @@ async def fingerprint_stats():
 # Legacy Utility Endpoints (from template)
 # ============================================================================
 
+
 @app.get("/demo")
 async def demo():
     """Demo endpoint showing service capabilities."""
@@ -786,12 +856,13 @@ async def demo():
         "detection_methods": {
             "pattern_matching": "Regex-based injection/jailbreak detection",
             "behavioral_analysis": "Rate limiting and burst detection",
-            "fingerprint_similarity": "MinHash Jaccard similarity + SimHash hamming distance",
+            "fingerprint_similarity": "MinHash Jaccard similarity + SimHash hamming distance",  # noqa: E501
             "semantic_clustering": "Keyword-based semantic hashing",
             "campaign_detection": "Cross-IP content correlation",
         },
         "status": "operational",
-        "openrouter_proxy": bool(OPENROUTER_API_KEY),
+        "backend_type": BACKEND_TYPE,
+        "backend_configured": bool(get_backend_config()[1]),
         "blocking_mode": BLOCKING_ENABLED,
     }
 

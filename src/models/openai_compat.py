@@ -3,7 +3,7 @@ OpenAI-compatible API models for OpenSafety AI Corporation of America.
 These models mirror the OpenAI/OpenRouter API specification for /v1/chat/completions.
 """
 
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union  # noqa: I001
 from pydantic import BaseModel, Field
 from enum import Enum
 import time
@@ -20,12 +20,14 @@ class MessageRole(str, Enum):
 
 class FunctionCall(BaseModel):
     """Function call in assistant message."""
+
     name: str
     arguments: str  # JSON string
 
 
 class ToolCall(BaseModel):
     """Tool call made by the model."""
+
     id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:24]}")
     type: Literal["function"] = "function"
     function: FunctionCall
@@ -33,6 +35,7 @@ class ToolCall(BaseModel):
 
 class ContentPart(BaseModel):
     """Multimodal content part (text or image)."""
+
     type: Literal["text", "image_url"]
     text: Optional[str] = None
     image_url: Optional[dict[str, str]] = None  # {"url": "...", "detail": "auto"}
@@ -40,6 +43,7 @@ class ContentPart(BaseModel):
 
 class ChatMessage(BaseModel):
     """A single message in the conversation."""
+
     role: MessageRole
     content: Optional[Union[str, list[ContentPart]]] = None
     name: Optional[str] = None  # For function/tool messages
@@ -50,6 +54,7 @@ class ChatMessage(BaseModel):
 
 class FunctionDefinition(BaseModel):
     """Function definition for tools."""
+
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
@@ -58,18 +63,21 @@ class FunctionDefinition(BaseModel):
 
 class Tool(BaseModel):
     """Tool definition."""
+
     type: Literal["function"] = "function"
     function: FunctionDefinition
 
 
 class ResponseFormat(BaseModel):
     """Response format specification."""
+
     type: Literal["text", "json_object", "json_schema"] = "text"
     json_schema: Optional[dict[str, Any]] = None
 
 
 class StreamOptions(BaseModel):
     """Streaming options."""
+
     include_usage: bool = False
 
 
@@ -78,7 +86,11 @@ class ChatCompletionRequest(BaseModel):
     OpenAI-compatible chat completion request.
     Mirrors OpenRouter/OpenAI API specification.
     """
-    model: str = Field(..., description="Model ID (e.g., 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet')")
+
+    model: str = Field(
+        ...,
+        description="Model ID (e.g., 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet')",
+    )  # noqa: E501
     messages: list[ChatMessage] = Field(..., description="Conversation messages")
 
     # Generation parameters
@@ -101,7 +113,9 @@ class ChatCompletionRequest(BaseModel):
 
     # Tools and functions
     tools: Optional[list[Tool]] = None
-    tool_choice: Optional[Union[str, dict[str, Any]]] = None  # "auto", "none", "required", or specific
+    tool_choice: Optional[Union[str, dict[str, Any]]] = (
+        None  # "auto", "none", "required", or specific  # noqa: E501
+    )
     parallel_tool_calls: Optional[bool] = True
 
     # Response format
@@ -124,6 +138,7 @@ class ChatCompletionRequest(BaseModel):
 
 class Usage(BaseModel):
     """Token usage statistics."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -135,6 +150,7 @@ class Usage(BaseModel):
 
 class ChoiceMessage(BaseModel):
     """Message in a completion choice."""
+
     role: Literal["assistant"] = "assistant"
     content: Optional[str] = None
     tool_calls: Optional[list[ToolCall]] = None
@@ -144,6 +160,7 @@ class ChoiceMessage(BaseModel):
 
 class LogprobContent(BaseModel):
     """Logprob for a single token."""
+
     token: str
     logprob: float
     bytes: Optional[list[int]] = None
@@ -152,14 +169,18 @@ class LogprobContent(BaseModel):
 
 class ChoiceLogprobs(BaseModel):
     """Logprobs for a choice."""
+
     content: Optional[list[LogprobContent]] = None
 
 
 class Choice(BaseModel):
     """A single completion choice."""
+
     index: int = 0
     message: ChoiceMessage
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "content_filter", "function_call"]] = None
+    finish_reason: Optional[
+        Literal["stop", "length", "tool_calls", "content_filter", "function_call"]
+    ] = None  # noqa: E501
     logprobs: Optional[ChoiceLogprobs] = None
 
 
@@ -167,6 +188,7 @@ class ChatCompletionResponse(BaseModel):
     """
     OpenAI-compatible chat completion response.
     """
+
     id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex}")
     object: Literal["chat.completion"] = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -182,6 +204,7 @@ class ChatCompletionResponse(BaseModel):
 
 class DeltaMessage(BaseModel):
     """Delta message for streaming."""
+
     role: Optional[Literal["assistant"]] = None
     content: Optional[str] = None
     tool_calls: Optional[list[dict[str, Any]]] = None
@@ -190,6 +213,7 @@ class DeltaMessage(BaseModel):
 
 class StreamChoice(BaseModel):
     """Choice in a streaming chunk."""
+
     index: int = 0
     delta: DeltaMessage
     finish_reason: Optional[str] = None
@@ -200,6 +224,7 @@ class ChatCompletionChunk(BaseModel):
     """
     Streaming chunk for chat completions (SSE).
     """
+
     id: str
     object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
     created: int
@@ -211,6 +236,7 @@ class ChatCompletionChunk(BaseModel):
 
 class ModelInfo(BaseModel):
     """Model information from /v1/models."""
+
     id: str
     object: Literal["model"] = "model"
     created: int = 0
@@ -224,12 +250,14 @@ class ModelInfo(BaseModel):
 
 class ModelsResponse(BaseModel):
     """Response for /v1/models endpoint."""
+
     object: Literal["list"] = "list"
     data: list[ModelInfo]
 
 
 class ErrorDetail(BaseModel):
     """Error detail."""
+
     message: str
     type: str
     param: Optional[str] = None
@@ -238,4 +266,5 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     """API error response."""
+
     error: ErrorDetail

@@ -7,13 +7,17 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from src.detection.tracker import RequestTracker, TrackedRequest, hash_content, hash_api_key
-from src.detection.patterns import SplitAttackDetector, AttackPattern, AttackPatternType
-from src.detection.fingerprint import AdvancedFingerprinter, ContentFingerprint, FingerprintMatch
+from detection.fingerprint import (
+    AdvancedFingerprinter,
+    ContentFingerprint,
+)
+from detection.patterns import AttackPattern, AttackPatternType, SplitAttackDetector
+from detection.tracker import RequestTracker, TrackedRequest, hash_api_key, hash_content
 
 
 class ThreatLevel(str, Enum):
     """Threat severity levels."""
+
     NONE = "none"
     LOW = "low"
     MEDIUM = "medium"
@@ -23,6 +27,7 @@ class ThreatLevel(str, Enum):
 
 class ThreatAction(str, Enum):
     """Recommended actions for threats."""
+
     ALLOW = "allow"
     LOG = "log"  # Allow but log for review
     RATE_LIMIT = "rate_limit"  # Slow down requests
@@ -34,6 +39,7 @@ class ThreatAction(str, Enum):
 @dataclass
 class ThreatSignal:
     """Individual threat signal from analysis."""
+
     name: str
     score: float  # 0.0 to 1.0
     description: str
@@ -44,6 +50,7 @@ class ThreatSignal:
 @dataclass
 class ThreatAssessment:
     """Complete threat assessment for a request."""
+
     request_id: str
     threat_score: float  # 0.0 to 1.0
     threat_level: ThreatLevel
@@ -145,17 +152,21 @@ class ThreatAnalyzer:
             request.api_key_hash = hash_api_key(api_key)
 
         # 1. Pattern-based detection
-        patterns = self.detector.analyze_request(request, message_contents, system_prompt)
+        patterns = self.detector.analyze_request(
+            request, message_contents, system_prompt
+        )
         all_patterns.extend(patterns)
 
         for pattern in patterns:
-            signals.append(ThreatSignal(
-                name=pattern.pattern_type.value,
-                score=pattern.confidence * pattern.severity,
-                description=pattern.description,
-                category="pattern",
-                metadata={"evidence": pattern.evidence[:3]},
-            ))
+            signals.append(
+                ThreatSignal(
+                    name=pattern.pattern_type.value,
+                    score=pattern.confidence * pattern.severity,
+                    description=pattern.description,
+                    category="pattern",
+                    metadata={"evidence": pattern.evidence[:3]},
+                )
+            )
 
         # 2. Behavioral analysis
         behavioral_signals = self._analyze_behavior(request)
@@ -164,12 +175,14 @@ class ThreatAnalyzer:
         # 3. Check repeat offender status
         is_repeat = self._check_repeat_offender(request.client_ip)
         if is_repeat:
-            signals.append(ThreatSignal(
-                name="repeat_offender",
-                score=0.3,
-                description="IP has history of suspicious requests",
-                category="history",
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="repeat_offender",
+                    score=0.3,
+                    description="IP has history of suspicious requests",
+                    category="history",
+                )
+            )
 
         # 4. Message structure analysis
         structure_signals = self._analyze_message_structure(messages)
@@ -265,58 +278,72 @@ class ThreatAnalyzer:
         # Request rate from IP
         rate_60s = self.tracker.get_ip_request_rate(request.client_ip, 60)
         if rate_60s > 5:
-            signals.append(ThreatSignal(
-                name="high_request_rate",
-                score=min((rate_60s - 5) * 0.1, 0.5),
-                description=f"Elevated request rate: {rate_60s:.1f}/min",
-                category="behavioral",
-                metadata={"rate": rate_60s},
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="high_request_rate",
+                    score=min((rate_60s - 5) * 0.1, 0.5),
+                    description=f"Elevated request rate: {rate_60s:.1f}/min",
+                    category="behavioral",
+                    metadata={"rate": rate_60s},
+                )
+            )
 
         # Content diversity (many different requests = possible fragmentation)
-        unique_content = self.tracker.count_unique_content_from_ip(request.client_ip, 300)
+        unique_content = self.tracker.count_unique_content_from_ip(
+            request.client_ip, 300
+        )
         if unique_content > 20:
-            signals.append(ThreatSignal(
-                name="high_content_diversity",
-                score=min((unique_content - 20) * 0.02, 0.4),
-                description=f"High content diversity: {unique_content} unique messages",
-                category="behavioral",
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="high_content_diversity",
+                    score=min((unique_content - 20) * 0.02, 0.4),
+                    description=f"High content diversity: {unique_content} unique messages",  # noqa: E501
+                    category="behavioral",
+                )
+            )
 
         return signals
 
-    def _analyze_message_structure(self, messages: list[dict[str, Any]]) -> list[ThreatSignal]:
+    def _analyze_message_structure(
+        self, messages: list[dict[str, Any]]
+    ) -> list[ThreatSignal]:
         """Analyze message structure for suspicious patterns."""
         signals = []
 
         # Check for unusual message count
         if len(messages) > 50:
-            signals.append(ThreatSignal(
-                name="excessive_messages",
-                score=min((len(messages) - 50) * 0.01, 0.3),
-                description=f"Unusually long conversation: {len(messages)} messages",
-                category="structure",
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="excessive_messages",
+                    score=min((len(messages) - 50) * 0.01, 0.3),
+                    description=f"Unusually long conversation: {len(messages)} messages",  # noqa: E501
+                    category="structure",
+                )
+            )
 
         # Check for role distribution
         roles = [m.get("role") for m in messages]
         if roles.count("system") > 1:
-            signals.append(ThreatSignal(
-                name="multiple_system_prompts",
-                score=0.4,
-                description="Multiple system prompts detected (possible injection)",
-                category="structure",
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="multiple_system_prompts",
+                    score=0.4,
+                    description="Multiple system prompts detected (possible injection)",
+                    category="structure",
+                )
+            )
 
         # Check for alternating pattern violations
         for i in range(1, len(messages)):
-            if messages[i].get("role") == messages[i-1].get("role") == "assistant":
-                signals.append(ThreatSignal(
-                    name="consecutive_assistant",
-                    score=0.2,
-                    description="Consecutive assistant messages (unusual structure)",
-                    category="structure",
-                ))
+            if messages[i].get("role") == messages[i - 1].get("role") == "assistant":
+                signals.append(
+                    ThreatSignal(
+                        name="consecutive_assistant",
+                        score=0.2,
+                        description="Consecutive assistant messages (unusual structure)",  # noqa: E501
+                        category="structure",
+                    )
+                )
                 break
 
         return signals
@@ -332,22 +359,26 @@ class ThreatAnalyzer:
         if contents:
             avg_length = sum(len(c) for c in contents) / len(contents)
             if avg_length < 20 and len(contents) > 5:
-                signals.append(ThreatSignal(
-                    name="short_fragmented_messages",
-                    score=0.25,
-                    description=f"Very short average message length ({avg_length:.0f} chars)",
-                    category="structure",
-                ))
+                signals.append(
+                    ThreatSignal(
+                        name="short_fragmented_messages",
+                        score=0.25,
+                        description=f"Very short average message length ({avg_length:.0f} chars)",  # noqa: E501
+                        category="structure",
+                    )
+                )
 
             # Very long single message might be trying to overflow context
             max_length = max(len(c) for c in contents)
             if max_length > 50000:
-                signals.append(ThreatSignal(
-                    name="extremely_long_message",
-                    score=0.3,
-                    description=f"Extremely long message ({max_length} chars)",
-                    category="structure",
-                ))
+                signals.append(
+                    ThreatSignal(
+                        name="extremely_long_message",
+                        score=0.3,
+                        description=f"Extremely long message ({max_length} chars)",
+                        category="structure",
+                    )
+                )
 
         return signals
 
@@ -380,87 +411,106 @@ class ThreatAnalyzer:
 
         # Check for high entropy (possible encoded/encrypted content)
         if fp.entropy > 5.5:
-            signals.append(ThreatSignal(
-                name="high_entropy_content",
-                score=min((fp.entropy - 5.5) * 0.2, 0.4),
-                description=f"High entropy content ({fp.entropy:.2f} bits/char) - possible encoding",
-                category="fingerprint",
-                metadata={"entropy": fp.entropy},
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="high_entropy_content",
+                    score=min((fp.entropy - 5.5) * 0.2, 0.4),
+                    description=f"High entropy content ({fp.entropy:.2f} bits/char) - possible encoding",  # noqa: E501
+                    category="fingerprint",
+                    metadata={"entropy": fp.entropy},
+                )
+            )
 
         # Check for suspicious code patterns
         if fp.code_ratio > 0.15:
-            signals.append(ThreatSignal(
-                name="high_code_ratio",
-                score=min(fp.code_ratio * 0.5, 0.3),
-                description=f"High code content ratio ({fp.code_ratio:.1%})",
-                category="fingerprint",
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="high_code_ratio",
+                    score=min(fp.code_ratio * 0.5, 0.3),
+                    description=f"High code content ratio ({fp.code_ratio:.1%})",
+                    category="fingerprint",
+                )
+            )
 
         # Check for suspicious entities
-        suspicious_entities = [e for e in fp.entities if any(
-            t in e for t in ['api_key', 'hash', 'path']
-        )]
+        suspicious_entities = [
+            e for e in fp.entities if any(t in e for t in ["api_key", "hash", "path"])
+        ]
         if suspicious_entities:
-            signals.append(ThreatSignal(
-                name="suspicious_entities",
-                score=min(len(suspicious_entities) * 0.15, 0.5),
-                description=f"Found {len(suspicious_entities)} suspicious entities",
-                category="fingerprint",
-                metadata={"entities": suspicious_entities[:5]},
-            ))
+            signals.append(
+                ThreatSignal(
+                    name="suspicious_entities",
+                    score=min(len(suspicious_entities) * 0.15, 0.5),
+                    description=f"Found {len(suspicious_entities)} suspicious entities",
+                    category="fingerprint",
+                    metadata={"entities": suspicious_entities[:5]},
+                )
+            )
 
         # Find similar previous requests (potential campaign/replay)
-        similar_matches = self.fingerprinter.find_similar(fp, min_similarity=0.75, max_results=5)
+        similar_matches = self.fingerprinter.find_similar(
+            fp, min_similarity=0.75, max_results=5
+        )
 
         if similar_matches:
             # Filter out self-matches and very recent
             significant_matches = [
-                m for m in similar_matches
+                m
+                for m in similar_matches
                 if m.fingerprint_b != fp.exact_hash and m.similarity_score < 0.99
             ]
 
             if significant_matches:
                 best_match = significant_matches[0]
 
-                signals.append(ThreatSignal(
-                    name="similar_content_detected",
-                    score=best_match.similarity_score * 0.4,
-                    description=f"Similar content found ({best_match.similarity_score:.1%} match)",
-                    category="fingerprint",
-                    metadata={
-                        "match_type": best_match.match_type,
-                        "matching_features": best_match.matching_features,
-                    },
-                ))
+                signals.append(
+                    ThreatSignal(
+                        name="similar_content_detected",
+                        score=best_match.similarity_score * 0.4,
+                        description=f"Similar content found ({best_match.similarity_score:.1%} match)",  # noqa: E501
+                        category="fingerprint",
+                        metadata={
+                            "match_type": best_match.match_type,
+                            "matching_features": best_match.matching_features,
+                        },
+                    )
+                )
 
                 if len(significant_matches) >= 3:
-                    patterns.append(AttackPattern(
-                        pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
-                        confidence=min(0.5 + len(significant_matches) * 0.1, 0.85),
-                        severity=0.7,
-                        description=f"Content matches {len(significant_matches)} previous requests",
-                        evidence=[f"Match similarity: {m.similarity_score:.1%}" for m in significant_matches[:3]],
-                        related_requests=[request.request_id],
-                        metadata={"match_count": len(significant_matches)},
-                    ))
+                    patterns.append(
+                        AttackPattern(
+                            pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
+                            confidence=min(0.5 + len(significant_matches) * 0.1, 0.85),
+                            severity=0.7,
+                            description=f"Content matches {len(significant_matches)} previous requests",  # noqa: E501
+                            evidence=[
+                                f"Match similarity: {m.similarity_score:.1%}"
+                                for m in significant_matches[:3]
+                            ],
+                            related_requests=[request.request_id],
+                            metadata={"match_count": len(significant_matches)},
+                        )
+                    )
 
         # Check for semantic evasion (same meaning, different words)
         # This catches paraphrased attack attempts
         if fp.semantic_hash:
             semantic_duplicates = sum(
-                1 for h, cached_fp in self._recent_fingerprints.items()
+                1
+                for h, cached_fp in self._recent_fingerprints.items()
                 if cached_fp.semantic_hash == fp.semantic_hash and h != fp.exact_hash
             )
             if semantic_duplicates >= 2:
-                patterns.append(AttackPattern(
-                    pattern_type=AttackPatternType.SEMANTIC_EVASION,
-                    confidence=min(0.4 + semantic_duplicates * 0.1, 0.8),
-                    severity=0.65,
-                    description=f"Semantically similar to {semantic_duplicates} previous requests",
-                    evidence=[f"Semantic hash: {fp.semantic_hash[:8]}..."],
-                    related_requests=[request.request_id],
-                ))
+                patterns.append(
+                    AttackPattern(
+                        pattern_type=AttackPatternType.SEMANTIC_EVASION,
+                        confidence=min(0.4 + semantic_duplicates * 0.1, 0.8),
+                        severity=0.65,
+                        description=f"Semantically similar to {semantic_duplicates} previous requests",  # noqa: E501
+                        evidence=[f"Semantic hash: {fp.semantic_hash[:8]}..."],
+                        related_requests=[request.request_id],
+                    )
+                )
 
         # Cache this fingerprint
         self._recent_fingerprints[fp.exact_hash] = fp
@@ -469,7 +519,7 @@ class ThreatAnalyzer:
         if len(self._recent_fingerprints) > 1000:
             oldest_keys = sorted(
                 self._recent_fingerprints.keys(),
-                key=lambda k: self._recent_fingerprints[k].timestamp
+                key=lambda k: self._recent_fingerprints[k].timestamp,
             )[:200]
             for k in oldest_keys:
                 del self._recent_fingerprints[k]

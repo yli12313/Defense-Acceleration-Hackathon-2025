@@ -1,15 +1,15 @@
 """OpenSafety AI data models."""
 
-from src.models.openai_compat import (
+from models.openai_compat import (
+    ChatCompletionChunk,
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatCompletionChunk,
     ChatMessage,
     Choice,
     ChoiceMessage,
     DeltaMessage,
-    ErrorResponse,
     ErrorDetail,
+    ErrorResponse,
     MessageRole,
     ModelInfo,
     ModelsResponse,

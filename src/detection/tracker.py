@@ -3,19 +3,20 @@ Request Tracker for OpenSafety AI.
 Tracks requests across multiple dimensions for correlation and attack detection.
 """
 
-import hashlib
+import hashlib  # noqa: I001
 import time
 import threading
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Optional
-from datetime import datetime
+from datetime import datetime  # noqa: F401
 
 
 @dataclass
 class TrackedRequest:
     """A tracked API request with all relevant metadata."""
+
     request_id: str
     timestamp: float
 
@@ -39,7 +40,9 @@ class TrackedRequest:
 
     # Extracted signals
     detected_patterns: list[str] = field(default_factory=list)
-    extracted_entities: list[str] = field(default_factory=list)  # URLs, IPs, code snippets
+    extracted_entities: list[str] = field(
+        default_factory=list
+    )  # URLs, IPs, code snippets  # noqa: E501
 
     # Response metadata
     response_tokens: int = 0
@@ -72,11 +75,21 @@ class RequestTracker:
         self.cleanup_interval = cleanup_interval_seconds
 
         # Request storage indexed by different dimensions
-        self._by_ip: dict[str, deque[TrackedRequest]] = defaultdict(lambda: deque(maxlen=max_requests_per_key))
-        self._by_user: dict[str, deque[TrackedRequest]] = defaultdict(lambda: deque(maxlen=max_requests_per_key))
-        self._by_api_key: dict[str, deque[TrackedRequest]] = defaultdict(lambda: deque(maxlen=max_requests_per_key))
-        self._by_content_hash: dict[str, deque[TrackedRequest]] = defaultdict(lambda: deque(maxlen=100))
-        self._by_system_hash: dict[str, deque[TrackedRequest]] = defaultdict(lambda: deque(maxlen=500))
+        self._by_ip: dict[str, deque[TrackedRequest]] = defaultdict(
+            lambda: deque(maxlen=max_requests_per_key)
+        )  # noqa: E501
+        self._by_user: dict[str, deque[TrackedRequest]] = defaultdict(
+            lambda: deque(maxlen=max_requests_per_key)
+        )  # noqa: E501
+        self._by_api_key: dict[str, deque[TrackedRequest]] = defaultdict(
+            lambda: deque(maxlen=max_requests_per_key)
+        )  # noqa: E501
+        self._by_content_hash: dict[str, deque[TrackedRequest]] = defaultdict(
+            lambda: deque(maxlen=100)
+        )  # noqa: E501
+        self._by_system_hash: dict[str, deque[TrackedRequest]] = defaultdict(
+            lambda: deque(maxlen=500)
+        )  # noqa: E501
 
         # Global recent requests for burst detection
         self._recent_all: deque[TrackedRequest] = deque(maxlen=10000)
@@ -133,27 +146,45 @@ class RequestTracker:
             if request.was_blocked:
                 self._stats["blocked_requests"] += 1
 
-    def get_requests_by_ip(self, ip: str, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def get_requests_by_ip(
+        self, ip: str, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get recent requests from an IP within the time window."""
         return self._get_recent(self._by_ip.get(ip, deque()), window_seconds)
 
-    def get_requests_by_user(self, user_id: str, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def get_requests_by_user(
+        self, user_id: str, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get recent requests from a user within the time window."""
         return self._get_recent(self._by_user.get(user_id, deque()), window_seconds)
 
-    def get_requests_by_api_key(self, api_key_hash: str, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def get_requests_by_api_key(
+        self, api_key_hash: str, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get recent requests from an API key within the time window."""
-        return self._get_recent(self._by_api_key.get(api_key_hash, deque()), window_seconds)
+        return self._get_recent(
+            self._by_api_key.get(api_key_hash, deque()), window_seconds
+        )  # noqa: E501
 
-    def get_requests_by_content(self, content_hash: str, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def get_requests_by_content(
+        self, content_hash: str, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get requests with matching content hash."""
-        return self._get_recent(self._by_content_hash.get(content_hash, deque()), window_seconds)
+        return self._get_recent(
+            self._by_content_hash.get(content_hash, deque()), window_seconds
+        )  # noqa: E501
 
-    def get_requests_by_system_prompt(self, system_hash: str, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def get_requests_by_system_prompt(
+        self, system_hash: str, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get requests using the same system prompt (campaign detection)."""
-        return self._get_recent(self._by_system_hash.get(system_hash, deque()), window_seconds)
+        return self._get_recent(
+            self._by_system_hash.get(system_hash, deque()), window_seconds
+        )  # noqa: E501
 
-    def get_recent_requests(self, window_seconds: Optional[int] = None, limit: int = 1000) -> list[TrackedRequest]:
+    def get_recent_requests(
+        self, window_seconds: Optional[int] = None, limit: int = 1000
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get all recent requests within the time window."""
         requests = self._get_recent(self._recent_all, window_seconds)
         return requests[-limit:] if len(requests) > limit else requests
@@ -172,12 +203,16 @@ class RequestTracker:
             return 0.0
         return len(requests) / window_seconds
 
-    def count_unique_ips_for_content(self, content_hash: str, window_seconds: Optional[int] = None) -> int:
+    def count_unique_ips_for_content(
+        self, content_hash: str, window_seconds: Optional[int] = None
+    ) -> int:  # noqa: E501
         """Count unique IPs sending same content (distributed attack detection)."""
         requests = self.get_requests_by_content(content_hash, window_seconds)
         return len(set(r.client_ip for r in requests))
 
-    def count_unique_content_from_ip(self, ip: str, window_seconds: Optional[int] = None) -> int:
+    def count_unique_content_from_ip(
+        self, ip: str, window_seconds: Optional[int] = None
+    ) -> int:  # noqa: E501
         """Count unique content hashes from an IP (fragmentation detection)."""
         requests = self.get_requests_by_ip(ip, window_seconds)
         return len(set(r.content_hash for r in requests if r.content_hash))
@@ -196,7 +231,9 @@ class RequestTracker:
                 "tracked_system_prompts": len(self._by_system_hash),
             }
 
-    def _get_recent(self, queue: deque, window_seconds: Optional[int] = None) -> list[TrackedRequest]:
+    def _get_recent(
+        self, queue: deque, window_seconds: Optional[int] = None
+    ) -> list[TrackedRequest]:  # noqa: E501
         """Get items from queue within time window."""
         window = window_seconds or self.window_size
         cutoff = time.time() - window
@@ -216,8 +253,13 @@ class RequestTracker:
 
         with self._lock:
             # Clean each index
-            for index in [self._by_ip, self._by_user, self._by_api_key,
-                          self._by_content_hash, self._by_system_hash]:
+            for index in [
+                self._by_ip,
+                self._by_user,
+                self._by_api_key,
+                self._by_content_hash,
+                self._by_system_hash,
+            ]:
                 empty_keys = []
                 for key, queue in index.items():
                     # Remove old entries from front of queue

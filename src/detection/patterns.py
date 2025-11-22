@@ -9,18 +9,19 @@ Detects multi-stage attacks that fragment malicious intent across:
 """
 
 import re
-import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
-from collections import Counter
 
-from src.detection.tracker import RequestTracker, TrackedRequest
+from detection.tracker import RequestTracker, TrackedRequest
 
 
 class AttackPatternType(str, Enum):
     """Types of split-up attack patterns."""
-    FRAGMENT_ASSEMBLY = "fragment_assembly"  # Pieces of malicious content across requests
+
+    FRAGMENT_ASSEMBLY = (
+        "fragment_assembly"  # Pieces of malicious content across requests
+    )
     CONTEXT_POISONING = "context_poisoning"  # Gradual context manipulation
     INSTRUCTION_INJECTION = "instruction_injection"  # Hidden instructions in fragments
     ROLE_CONFUSION = "role_confusion"  # Attempts to confuse model roles
@@ -35,6 +36,7 @@ class AttackPatternType(str, Enum):
 @dataclass
 class AttackPattern:
     """Detected attack pattern with evidence."""
+
     pattern_type: AttackPatternType
     confidence: float  # 0.0 to 1.0
     severity: float  # 0.0 to 1.0
@@ -99,9 +101,15 @@ class SplitAttackDetector:
         self.tracker = tracker
 
         # Compile patterns for efficiency
-        self._injection_re = [re.compile(p, re.IGNORECASE) for p in self.INJECTION_MARKERS]
-        self._exfil_re = [re.compile(p, re.IGNORECASE) for p in self.EXFILTRATION_MARKERS]
-        self._jailbreak_re = [re.compile(p, re.IGNORECASE) for p in self.JAILBREAK_MARKERS]
+        self._injection_re = [
+            re.compile(p, re.IGNORECASE) for p in self.INJECTION_MARKERS
+        ]
+        self._exfil_re = [
+            re.compile(p, re.IGNORECASE) for p in self.EXFILTRATION_MARKERS
+        ]
+        self._jailbreak_re = [
+            re.compile(p, re.IGNORECASE) for p in self.JAILBREAK_MARKERS
+        ]
         self._code_re = [re.compile(p, re.IGNORECASE) for p in self.CODE_PATTERNS]
 
     def analyze_request(
@@ -140,7 +148,9 @@ class SplitAttackDetector:
 
         return patterns
 
-    def _detect_injection_patterns(self, content: str, request: TrackedRequest) -> list[AttackPattern]:
+    def _detect_injection_patterns(
+        self, content: str, request: TrackedRequest
+    ) -> list[AttackPattern]:
         """Detect prompt injection markers."""
         patterns = []
         matches = []
@@ -148,22 +158,28 @@ class SplitAttackDetector:
         for regex in self._injection_re:
             found = regex.findall(content)
             if found:
-                matches.extend(found if isinstance(found[0], str) else [f[0] for f in found])
+                matches.extend(
+                    found if isinstance(found[0], str) else [f[0] for f in found]
+                )
 
         if matches:
             confidence = min(0.3 + 0.15 * len(matches), 0.95)
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.INSTRUCTION_INJECTION,
-                confidence=confidence,
-                severity=0.7,
-                description=f"Detected {len(matches)} potential injection markers",
-                evidence=matches[:5],  # Limit evidence size
-                related_requests=[request.request_id],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.INSTRUCTION_INJECTION,
+                    confidence=confidence,
+                    severity=0.7,
+                    description=f"Detected {len(matches)} potential injection markers",
+                    evidence=matches[:5],  # Limit evidence size
+                    related_requests=[request.request_id],
+                )
+            )
 
         return patterns
 
-    def _detect_exfiltration_patterns(self, content: str, request: TrackedRequest) -> list[AttackPattern]:
+    def _detect_exfiltration_patterns(
+        self, content: str, request: TrackedRequest
+    ) -> list[AttackPattern]:
         """Detect prompt/data exfiltration attempts."""
         patterns = []
         matches = []
@@ -171,21 +187,27 @@ class SplitAttackDetector:
         for regex in self._exfil_re:
             found = regex.findall(content)
             if found:
-                matches.extend(found if isinstance(found[0], str) else [str(f) for f in found])
+                matches.extend(
+                    found if isinstance(found[0], str) else [str(f) for f in found]
+                )
 
         if matches:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.PROMPT_LEAK,
-                confidence=min(0.5 + 0.1 * len(matches), 0.9),
-                severity=0.8,
-                description="Detected attempt to extract system prompt or training data",
-                evidence=matches[:3],
-                related_requests=[request.request_id],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.PROMPT_LEAK,
+                    confidence=min(0.5 + 0.1 * len(matches), 0.9),
+                    severity=0.8,
+                    description="Detected attempt to extract system prompt or training data",  # noqa: E501
+                    evidence=matches[:3],
+                    related_requests=[request.request_id],
+                )
+            )
 
         return patterns
 
-    def _detect_jailbreak_patterns(self, content: str, request: TrackedRequest) -> list[AttackPattern]:
+    def _detect_jailbreak_patterns(
+        self, content: str, request: TrackedRequest
+    ) -> list[AttackPattern]:
         """Detect jailbreak sequence markers."""
         patterns = []
         matches = []
@@ -193,21 +215,27 @@ class SplitAttackDetector:
         for regex in self._jailbreak_re:
             found = regex.findall(content)
             if found:
-                matches.extend(found if isinstance(found[0], str) else [str(f) for f in found])
+                matches.extend(
+                    found if isinstance(found[0], str) else [str(f) for f in found]
+                )
 
         if matches:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.JAILBREAK_SEQUENCE,
-                confidence=min(0.4 + 0.12 * len(matches), 0.85),
-                severity=0.6,
-                description=f"Detected {len(matches)} jailbreak indicators",
-                evidence=matches[:3],
-                related_requests=[request.request_id],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.JAILBREAK_SEQUENCE,
+                    confidence=min(0.4 + 0.12 * len(matches), 0.85),
+                    severity=0.6,
+                    description=f"Detected {len(matches)} jailbreak indicators",
+                    evidence=matches[:3],
+                    related_requests=[request.request_id],
+                )
+            )
 
         return patterns
 
-    def _detect_code_patterns(self, content: str, request: TrackedRequest) -> list[AttackPattern]:
+    def _detect_code_patterns(
+        self, content: str, request: TrackedRequest
+    ) -> list[AttackPattern]:
         """Detect potentially dangerous code patterns."""
         patterns = []
         matches = []
@@ -215,18 +243,22 @@ class SplitAttackDetector:
         for regex in self._code_re:
             found = regex.findall(content)
             if found:
-                matches.extend(found if isinstance(found[0], str) else [str(f) for f in found])
+                matches.extend(
+                    found if isinstance(found[0], str) else [str(f) for f in found]
+                )
 
         if matches:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.DATA_EXFILTRATION,
-                confidence=min(0.35 + 0.15 * len(matches), 0.8),
-                severity=0.75,
-                description="Detected potentially dangerous code execution patterns",
-                evidence=matches[:3],
-                related_requests=[request.request_id],
-                metadata={"code_patterns": matches},
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.DATA_EXFILTRATION,
+                    confidence=min(0.35 + 0.15 * len(matches), 0.8),
+                    severity=0.75,
+                    description="Detected potentially dangerous code execution patterns",  # noqa: E501
+                    evidence=matches[:3],
+                    related_requests=[request.request_id],
+                    metadata={"code_patterns": matches},
+                )
+            )
 
         return patterns
 
@@ -237,27 +269,33 @@ class SplitAttackDetector:
         # Check IP request rate
         ip_rate = self.tracker.get_ip_request_rate(request.client_ip, window_seconds=60)
         if ip_rate > 10:  # More than 10 requests per minute
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.RATE_ABUSE,
-                confidence=min(0.3 + (ip_rate - 10) * 0.05, 0.9),
-                severity=0.5,
-                description=f"High request rate from IP: {ip_rate:.1f}/min",
-                evidence=[f"Rate: {ip_rate:.1f} requests/minute"],
-                related_requests=[request.request_id],
-                metadata={"rate_per_minute": ip_rate},
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.RATE_ABUSE,
+                    confidence=min(0.3 + (ip_rate - 10) * 0.05, 0.9),
+                    severity=0.5,
+                    description=f"High request rate from IP: {ip_rate:.1f}/min",
+                    evidence=[f"Rate: {ip_rate:.1f} requests/minute"],
+                    related_requests=[request.request_id],
+                    metadata={"rate_per_minute": ip_rate},
+                )
+            )
 
         # Check for burst patterns (many requests in short window)
-        recent_from_ip = self.tracker.get_requests_by_ip(request.client_ip, window_seconds=10)
+        recent_from_ip = self.tracker.get_requests_by_ip(
+            request.client_ip, window_seconds=10
+        )
         if len(recent_from_ip) > 5:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.RATE_ABUSE,
-                confidence=0.6,
-                severity=0.6,
-                description=f"Burst detected: {len(recent_from_ip)} requests in 10 seconds",
-                evidence=[f"Requests in burst: {len(recent_from_ip)}"],
-                related_requests=[r.request_id for r in recent_from_ip[-5:]],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.RATE_ABUSE,
+                    confidence=0.6,
+                    severity=0.6,
+                    description=f"Burst detected: {len(recent_from_ip)} requests in 10 seconds",  # noqa: E501
+                    evidence=[f"Requests in burst: {len(recent_from_ip)}"],
+                    related_requests=[r.request_id for r in recent_from_ip[-5:]],
+                )
+            )
 
         return patterns
 
@@ -267,20 +305,26 @@ class SplitAttackDetector:
 
         if request.content_hash:
             unique_ips = self.tracker.count_unique_ips_for_content(
-                request.content_hash, window_seconds=3600  # 1 hour window
+                request.content_hash,
+                window_seconds=3600,  # 1 hour window
             )
 
             if unique_ips >= 3:  # Same content from 3+ IPs
                 related = self.tracker.get_requests_by_content(request.content_hash)
-                patterns.append(AttackPattern(
-                    pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
-                    confidence=min(0.4 + unique_ips * 0.1, 0.9),
-                    severity=0.8,
-                    description=f"Same content from {unique_ips} different IPs",
-                    evidence=[f"Unique source IPs: {unique_ips}"],
-                    related_requests=[r.request_id for r in related[-10:]],
-                    metadata={"unique_ips": unique_ips, "content_hash": request.content_hash},
-                ))
+                patterns.append(
+                    AttackPattern(
+                        pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
+                        confidence=min(0.4 + unique_ips * 0.1, 0.9),
+                        severity=0.8,
+                        description=f"Same content from {unique_ips} different IPs",
+                        evidence=[f"Unique source IPs: {unique_ips}"],
+                        related_requests=[r.request_id for r in related[-10:]],
+                        metadata={
+                            "unique_ips": unique_ips,
+                            "content_hash": request.content_hash,
+                        },
+                    )
+                )
 
         # Check for same system prompt from many sources (campaign detection)
         if request.system_prompt_hash:
@@ -290,14 +334,18 @@ class SplitAttackDetector:
             unique_ips = len(set(r.client_ip for r in system_requests))
 
             if unique_ips >= 5 and len(system_requests) >= 10:
-                patterns.append(AttackPattern(
-                    pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
-                    confidence=min(0.5 + unique_ips * 0.05, 0.85),
-                    severity=0.7,
-                    description=f"Identical system prompt from {unique_ips} IPs ({len(system_requests)} requests)",
-                    evidence=[f"System prompt hash: {request.system_prompt_hash[:8]}..."],
-                    related_requests=[r.request_id for r in system_requests[-10:]],
-                ))
+                patterns.append(
+                    AttackPattern(
+                        pattern_type=AttackPatternType.COORDINATED_CAMPAIGN,
+                        confidence=min(0.5 + unique_ips * 0.05, 0.85),
+                        severity=0.7,
+                        description=f"Identical system prompt from {unique_ips} IPs ({len(system_requests)} requests)",  # noqa: E501
+                        evidence=[
+                            f"System prompt hash: {request.system_prompt_hash[:8]}..."
+                        ],
+                        related_requests=[r.request_id for r in system_requests[-10:]],
+                    )
+                )
 
         return patterns
 
@@ -316,37 +364,52 @@ class SplitAttackDetector:
             return patterns
 
         # Check for increasing diversity of content (fragmentation signal)
-        unique_contents = self.tracker.count_unique_content_from_ip(request.client_ip, 300)
+        unique_contents = self.tracker.count_unique_content_from_ip(
+            request.client_ip, 300
+        )
         if unique_contents > 10:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.FRAGMENT_ASSEMBLY,
-                confidence=min(0.3 + unique_contents * 0.03, 0.7),
-                severity=0.65,
-                description=f"High content diversity: {unique_contents} unique messages in 5 minutes",
-                evidence=[f"Unique content hashes: {unique_contents}"],
-                related_requests=[r.request_id for r in recent[-5:]],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.FRAGMENT_ASSEMBLY,
+                    confidence=min(0.3 + unique_contents * 0.03, 0.7),
+                    severity=0.65,
+                    description=f"High content diversity: {unique_contents} unique messages in 5 minutes",  # noqa: E501
+                    evidence=[f"Unique content hashes: {unique_contents}"],
+                    related_requests=[r.request_id for r in recent[-5:]],
+                )
+            )
 
         # Check for sequential numbering or continuation patterns in messages
         continuation_signals = 0
         for content in message_contents:
             lower = content.lower()
-            if any(marker in lower for marker in [
-                "continued", "part 2", "part 3", "continuation",
-                "as mentioned", "following up", "next step",
-                "building on", "to continue"
-            ]):
+            if any(
+                marker in lower
+                for marker in [
+                    "continued",
+                    "part 2",
+                    "part 3",
+                    "continuation",
+                    "as mentioned",
+                    "following up",
+                    "next step",
+                    "building on",
+                    "to continue",
+                ]
+            ):
                 continuation_signals += 1
 
         if continuation_signals > 0 and len(recent) > 2:
-            patterns.append(AttackPattern(
-                pattern_type=AttackPatternType.FRAGMENT_ASSEMBLY,
-                confidence=0.5,
-                severity=0.5,
-                description="Detected continuation/sequencing language suggesting multi-part content",
-                evidence=[f"Continuation signals: {continuation_signals}"],
-                related_requests=[r.request_id for r in recent[-3:]],
-            ))
+            patterns.append(
+                AttackPattern(
+                    pattern_type=AttackPatternType.FRAGMENT_ASSEMBLY,
+                    confidence=0.5,
+                    severity=0.5,
+                    description="Detected continuation/sequencing language suggesting multi-part content",  # noqa: E501
+                    evidence=[f"Continuation signals: {continuation_signals}"],
+                    related_requests=[r.request_id for r in recent[-3:]],
+                )
+            )
 
         return patterns
 
