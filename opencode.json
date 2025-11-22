@@ -1,33 +1,22 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "theme": "opencode",
-  "model": "vllm/huihui-ai/Llama-3.3-70B-Instruct-abliterated",
-  "autoupdate": false,
+  "model": "llama/huihui-ai/Llama-3.3-70B-Instruct-abliterated",
   "provider": {
-    "vllm": {
+    "llama": {
+      "npm": "@ai-sdk/openai-compatible",
       "name": "VLLM Local",
-      "api": "http://129.213.21.136:8000/v1/chat/completions",
-      "models": {
-        "huihui-ai/Llama-3.3-70B-Instruct-abliterated": {
-          "id": "huihui-ai/Llama-3.3-70B-Instruct-abliterated",
-          "cost": {
-            "input": 0,
-            "output": 0
-          },
-          "limit": {
-            "context": 8192,
-            "output": 2048
-          },
-          "modalities": {
-            "input": ["text"],
-            "output": ["text"]
-          }
-        }
-      },
       "options": {
         "baseURL": "http://129.213.21.136:8000/v1",
-        "timeout": 30000
+        "apiKey": "sk-fake-key"
+      },
+      "models": {
+        "huihui-ai/Llama-3.3-70B-Instruct-abliterated": {
+          "name": "Llama-3.3-70B-Instruct (local)",
+          "tool_call": true
+        }
       }
     }
   }
 }
+
