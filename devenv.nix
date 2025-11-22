@@ -4,7 +4,7 @@
   inputs,
   ...
 }: {
-  packages = with pkgs; [git cmake zlib pre-commit curl wget age sops];
+  packages = with pkgs; [git cmake zlib pre-commit curl wget age sops opencode];
   dotenv.enable = true;
   languages.python = {
     enable = true;
