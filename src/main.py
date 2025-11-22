@@ -29,6 +29,7 @@ from detection.tracker import (
     TrackedRequest,
     create_request_id,
 )
+from middelwares.request_logging import RequestLoggingMiddleware
 from models.openai_compat import (
     ChatCompletionChunk,
     ChatCompletionRequest,
@@ -48,7 +49,7 @@ load_dotenv()
 
 # Backend Configuration
 BACKEND_TYPE = os.getenv("BACKEND_TYPE", "vllm").lower()
-
+LOG_FILE = os.getenv("LOG_FILE", "/tmp/fastapi.jsonl")
 # OpenRouter Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -125,6 +126,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request logging middleware - processes before all other middleware
+app.add_middleware(RequestLoggingMiddleware, log_file=LOG_FILE)
 
 
 # ============================================================================

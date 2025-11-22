@@ -1,4 +1,6 @@
 .env
+utils_extracted
+utils.zip
 **__pycache__**
 .direnv
 .vscode/
