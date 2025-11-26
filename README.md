@@ -1,5 +1,9 @@
 # Detecting Piecewise Cyber Espionage in Model APIs
 
+### Paper published and submitted to Apart Research.
+
+**Team**: Arthur Colle, Alex Reinthal, David Williams-King, Lihn Le, Yingquan Li 
+
 <img width="1404" height="534" alt="image" src="https://github.com/user-attachments/assets/88f386a4-0fb3-4438-ab29-849abd190755" />
 
 
