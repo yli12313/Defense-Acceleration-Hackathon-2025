@@ -2,7 +2,7 @@
 
 ### [Paper](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/Def_Acc_Hackathon_2025.pdf) published and submitted to Apart Research.
 
-**Team**: Arthur Colle, Alex Reinthal, David Williams-King, Lihn Le, Yingquan Li 
+**[Team](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/team.png)**: Arthur Colle, Alex Reinthal, David Williams-King, Lihn Le, Yingquan Li 
 
 <img width="1404" height="534" alt="image" src="https://github.com/user-attachments/assets/88f386a4-0fb3-4438-ab29-849abd190755" />
 
