@@ -1,6 +1,6 @@
 # Detecting Piecewise Cyber Espionage in Model APIs
 
-### [Paper](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/Def_Acc_Hackathon_2025.pdf) published and submitted to [Apart Research](https://apartresearch.com/project/detecting-piecewise-cyber-espionage-in-model-apis-a8gx)! We won 4th Place in a highly competitive global hackathon with 1000+ submissions, incredible!
+### [Paper](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/Def_Acc_Hackathon_2025.pdf) published and submitted to [Apart Research](https://apartresearch.com/project/detecting-piecewise-cyber-espionage-in-model-apis-a8gx)! We won [4th Place](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/4th_place.png) in a highly competitive global hackathon with 1000+ submissions, incredible!
 
 * **Team**: Arthur Colle, Alex Reinthal, David Williams-King, Lihn Le, Yingquan Li (**[Photo](https://github.com/yli12313/Defense-Acceleration-Hackathon-2025/blob/main/static/team.png)**)
 
